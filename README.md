@@ -6,7 +6,7 @@
 
 ## 🎮 Live Demo
 
-**[▶ Play the Game](https://sayali51.github.io/hunt-the-wumpus/)**
+**[▶ Play the Game](https://github.com/sayali51.github.io/hunt-the-wumpus/)**
 
 > Replace `YOUR-USERNAME` with your GitHub username after deploying.
 
