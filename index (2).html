@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hunt the Wumpus – AI Game</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+    }
+
+    /* ── HEADER ── */
+    #top-bar {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    #game-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #f0c060;
+    }
+    #game-title span { color: #e06060; }
+
+    #stats {
+      display: flex;
+      gap: 8px;
+    }
+    .stat-pill {
+      background: #1e1e30;
+      border: 1px solid #333355;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 13px;
+      color: #aaa;
+    }
+    .stat-pill b { color: #f0e0a0; }
+
+    /* ── CANVAS ── */
+    #cave-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 720px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #2a2a45;
+      background: #0a0a14;
+      margin-bottom: 14px;
+    }
+    #cave-canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 6/4;
+    }
+
+    /* ── OVERLAY ── */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.82);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      z-index: 20;
+    }
+    #overlay.hidden { display: none; }
+    #ov-emoji { font-size: 56px; margin-bottom: 10px; }
+    #ov-title { font-size: 26px; font-weight: 700; color: #f0e0a0; margin-bottom: 6px; }
+    #ov-msg   { font-size: 14px; color: #aaa; margin-bottom: 6px; text-align: center; max-width: 280px; }
+    #ov-score { font-size: 18px; color: #60d0a0; font-weight: 600; margin-bottom: 20px; }
+    #overlay button {
+      padding: 11px 32px;
+      border-radius: 8px;
+      border: none;
+      background: #f0c060;
+      color: #111;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #overlay button:hover { background: #ffd070; }
+
+    /* ── CONTROLS ── */
+    #controls-row {
+      width: 100%;
+      max-width: 720px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .ctrl-box {
+      background: #1a1a2e;
+      border: 1px solid #2a2a45;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .ctrl-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8080b0;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      width: 108px;
+      margin: 0 auto;
+    }
+    .dpad-btn {
+      background: #252540;
+      border: 1px solid #333360;
+      border-radius: 7px;
+      padding: 9px 4px;
+      font-size: 17px;
+      cursor: pointer;
+      text-align: center;
+      color: #c0c0e0;
+      transition: background 0.1s, transform 0.08s;
+      user-select: none;
+    }
+    .dpad-btn:hover  { background: #303055; }
+    .dpad-btn:active { transform: scale(0.92); }
+    .dpad-btn.empty  { visibility: hidden; cursor: default; }
+
+    #shoot-toggle {
+      display: block;
+      width: 100%;
+      padding: 8px 6px;
+      margin-bottom: 8px;
+      background: #252540;
+      border: 1px solid #333360;
+      border-radius: 7px;
+      font-size: 13px;
+      color: #c0c0e0;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    #shoot-toggle.on {
+      background: #1a3050;
+      border-color: #4080c0;
+      color: #80c0ff;
+      font-weight: 600;
+    }
+
+    .shoot-dpad .dpad-btn { color: #4080c0; opacity: 0.5; }
+    .shoot-dpad .dpad-btn:hover { opacity: 1; background: #1e2a40; }
+
+    /* legend box */
+    #legend {
+      font-size: 12px;
+      line-height: 1.9;
+      color: #888;
+    }
+    #legend b { color: #bbb; }
+
+    /* ── LOG ── */
+    #log-wrap {
+      width: 100%;
+      max-width: 720px;
+      background: #121220;
+      border: 1px solid #2a2a45;
+      border-radius: 10px;
+      padding: 12px 14px;
+      max-height: 120px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .le       { color: #888; }
+    .le.info  { color: #60a0e0; }
+    .le.warn  { color: #c0a020; }
+    .le.danger{ color: #d04040; }
+    .le.good  { color: #40b070; }
+
+    /* ── FOOTER ── */
+    #footer {
+      margin-top: 14px;
+      font-size: 12px;
+      color: #444;
+      text-align: center;
+    }
+    #footer a { color: #5080b0; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="top-bar">
+  <div id="game-title">Hunt the <span>Wumpus</span></div>
+  <div id="stats">
+    <div class="stat-pill">Room&nbsp;<b id="s-room">1</b></div>
+    <div class="stat-pill">🏹&nbsp;<b id="s-arrows">5</b></div>
+    <div class="stat-pill">Score&nbsp;<b id="s-score">0</b></div>
+  </div>
+</div>
+
+<!-- CAVE -->
+<div id="cave-wrap">
+  <canvas id="cave-canvas"></canvas>
+  <div id="overlay" class="hidden">
+    <div id="ov-emoji"></div>
+    <div id="ov-title"></div>
+    <div id="ov-msg"></div>
+    <div id="ov-score"></div>
+    <button onclick="newGame()">Play Again</button>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div id="controls-row">
+
+  <!-- MOVE -->
+  <div class="ctrl-box">
+    <div class="ctrl-label">Move</div>
+    <div class="dpad">
+      <div class="dpad-btn empty"></div>
+      <div class="dpad-btn" onclick="tryMove(0)">↑</div>
+      <div class="dpad-btn empty"></div>
+      <div class="dpad-btn" onclick="tryMove(3)">←</div>
+      <div class="dpad-btn empty"></div>
+      <div class="dpad-btn" onclick="tryMove(1)">→</div>
+      <div class="dpad-btn empty"></div>
+      <div class="dpad-btn" onclick="tryMove(2)">↓</div>
+      <div class="dpad-btn empty"></div>
+    </div>
+  </div>
+
+  <!-- SHOOT -->
+  <div class="ctrl-box">
+    <div class="ctrl-label">Shoot Arrow</div>
+    <button id="shoot-toggle" onclick="toggleShoot()">🏹 Shoot Mode: OFF</button>
+    <div class="dpad shoot-dpad">
+      <div class="dpad-btn empty"></div>
+      <div class="dpad-btn" onclick="tryShoot(0)">↑</div>
+      <div class="dpad-btn empty"></div>
+      <div class="dpad-btn" onclick="tryShoot(3)">←</div>
+      <div class="dpad-btn empty"></div>
+      <div class="dpad-btn" onclick="tryShoot(1)">→</div>
+      <div class="dpad-btn empty"></div>
+      <div class="dpad-btn" onclick="tryShoot(2)">↓</div>
+      <div class="dpad-btn empty"></div>
+    </div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="ctrl-box">
+    <div class="ctrl-label">Legend</div>
+    <div id="legend">
+      <b>🧑</b> You (agent)<br>
+      <b>👾</b> Wumpus<br>
+      <b>💰</b> Gold<br>
+      <b>🕳️</b> Pit<br>
+      <b>🦨</b> Stench nearby<br>
+      <b>💨</b> Breeze nearby<br>
+      <b>✨</b> Glimmer nearby<br>
+      <b>■</b> Fog of war
+    </div>
+  </div>
+
+</div>
+
+<!-- LOG -->
+<div id="log-wrap"></div>
+
+<div id="footer">
+  Hunt the Wumpus &nbsp;|&nbsp; AI Assignment &nbsp;|&nbsp;
+  Based on <a href="https://en.wikipedia.org/wiki/Hunt_the_Wumpus" target="_blank">Gregory Yob (1973)</a> &amp;
+  <a href="https://en.wikipedia.org/wiki/Wumpus_world" target="_blank">Russell &amp; Norvig AIMA</a>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════
+   GAME ENGINE
+═══════════════════════════════════════════ */
+const ROWS = 5, COLS = 6, TOTAL = ROWS * COLS;
+const DIRS = [[-1,0],[0,1],[1,0],[0,-1]];  // N E S W
+const DIR_NAMES = ['North','East','South','West'];
+
+let G = {};
+
+function idx(r, c) { return r * COLS + c; }
+function rc(i)  { return [Math.floor(i / COLS), i % COLS]; }
+
+function neighbors(i) {
+  const [r, c] = rc(i);
+  return DIRS.map(([dr, dc]) => {
+    const nr = r + dr, nc = c + dc;
+    return (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) ? idx(nr, nc) : -1;
+  }).filter(x => x >= 0);
+}
+
+function placeSafe(exclude) {
+  let n;
+  do { n = Math.floor(Math.random() * TOTAL); } while (exclude.includes(n));
+  return n;
+}
+
+function newGame() {
+  const start = placeSafe([]);
+  const wumpus = placeSafe([start]);
+  const pit1   = placeSafe([start, wumpus]);
+  const pit2   = placeSafe([start, wumpus, pit1]);
+  const gold   = placeSafe([start, wumpus, pit1, pit2]);
+
+  G = {
+    player: start, wumpus, pits: [pit1, pit2], gold,
+    arrows: 5, score: 0,
+    visited:  new Set([start]),
+    revealed: new Set([start]),
+    alive: true, won: false,
+    shootMode: false,
+    hasGold: false,
+  };
+  neighbors(start).forEach(n => G.revealed.add(n));
+
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('shoot-toggle').classList.remove('on');
+  document.getElementById('shoot-toggle').textContent = '🏹 Shoot Mode: OFF';
+  clearLog();
+  addLog('Welcome! You enter the dark cave. Good luck, hunter.', 'info');
+  sense();
+  draw();
+}
+
+/* ── ACTIONS ── */
+function tryMove(dir) {
+  if (!G.alive) return;
+  if (G.shootMode) { toggleShoot(); return; }
+  const [r, c] = rc(G.player);
+  const [dr, dc] = DIRS[dir];
+  const nr = r + dr, nc = c + dc;
+  if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) {
+    addLog('A cave wall blocks your path.', 'warn'); return;
+  }
+  G.player = idx(nr, nc);
+  G.visited.add(G.player);
+  G.revealed.add(G.player);
+  neighbors(G.player).forEach(n => G.revealed.add(n));
+  G.score -= 1;
+  addLog('You move ' + DIR_NAMES[dir] + '.');
+  if (!checkDeath()) sense();
+  draw();
+}
+
+function toggleShoot() {
+  if (!G.alive) return;
+  G.shootMode = !G.shootMode;
+  const btn = document.getElementById('shoot-toggle');
+  btn.textContent = '🏹 Shoot Mode: ' + (G.shootMode ? 'ON — pick direction' : 'OFF');
+  btn.classList.toggle('on', G.shootMode);
+}
+
+function tryShoot(dir) {
+  if (!G.alive) return;
+  if (!G.shootMode) { addLog('Enable shoot mode first.', 'warn'); return; }
+  if (G.arrows <= 0) { addLog('You have no arrows left!', 'danger'); toggleShoot(); return; }
+  G.arrows--; G.score -= 5;
+  toggleShoot();
+
+  const [r, c] = rc(G.player);
+  const [dr, dc] = DIRS[dir];
+  let hit = false;
+  let cr = r, cc = c;
+  for (let i = 0; i < 3; i++) {
+    cr += dr; cc += dc;
+    if (cr < 0 || cr >= ROWS || cc < 0 || cc >= COLS) break;
+    if (idx(cr, cc) === G.wumpus) { hit = true; break; }
+  }
+
+  if (hit) {
+    G.score += 200;
+    addLog('Your arrow flies true! The Wumpus lets out a terrible shriek… and dies! (+200 pts)', 'good');
+    endGame(true, '🎉', 'You killed the Wumpus!', 'The caves are safe again, brave hunter.', G.score);
+  } else {
+    addLog('Your arrow misses. A thunderous roar echoes through the caves…', 'warn');
+    const nb = neighbors(G.wumpus);
+    G.wumpus = nb[Math.floor(Math.random() * nb.length)];
+    if (G.wumpus === G.player) {
+      endGame(false, '💀', 'The Wumpus got you!', 'The disturbed Wumpus charged straight into your room.', G.score);
+    } else {
+      addLog('The Wumpus has moved. Be careful!', 'warn');
+    }
+  }
+  updateStats(); draw();
+}
+
+/* ── SENSE ── */
+function sense() {
+  const nb = neighbors(G.player);
+  if (nb.includes(G.wumpus))              addLog('You smell something absolutely terrible… 🦨', 'warn');
+  if (G.pits.some(p => nb.includes(p)))  addLog('You feel a cold breeze rising from the darkness. 💨', 'warn');
+  if (nb.includes(G.gold) && !G.hasGold) addLog('You see a faint glimmer in the distance… ✨', 'info');
+
+  if (G.player === G.gold && !G.hasGold) {
+    G.hasGold = true; G.score += 100;
+    addLog('You grabbed the gold! 💰 (+100 pts)', 'good');
+  }
+  updateStats();
+}
+
+function checkDeath() {
+  if (G.player === G.wumpus) {
+    endGame(false, '👾', 'Devoured by the Wumpus!', 'The Wumpus was lurking in this very room. You never stood a chance.', G.score);
+    return true;
+  }
+  if (G.pits.includes(G.player)) {
+    endGame(false, '🕳️', 'You fell into a pit!', 'The bottomless pit swallowed you into eternal darkness.', G.score);
+    return true;
+  }
+  return false;
+}
+
+function endGame(won, emoji, title, msg, score) {
+  G.alive = false; G.won = won;
+  document.getElementById('ov-emoji').textContent = emoji;
+  document.getElementById('ov-title').textContent = title;
+  document.getElementById('ov-msg').textContent   = msg;
+  document.getElementById('ov-score').textContent = 'Final Score: ' + score;
+  document.getElementById('overlay').classList.remove('hidden');
+  draw();
+}
+
+/* ── STATS / LOG ── */
+function updateStats() {
+  document.getElementById('s-room').textContent   = G.player + 1;
+  document.getElementById('s-arrows').textContent = G.arrows;
+  document.getElementById('s-score').textContent  = G.score;
+}
+function clearLog() { document.getElementById('log-wrap').innerHTML = ''; }
+function addLog(msg, cls = '') {
+  const el = document.createElement('div');
+  el.className = 'le' + (cls ? ' ' + cls : '');
+  el.textContent = msg;
+  const w = document.getElementById('log-wrap');
+  w.insertBefore(el, w.firstChild);
+}
+
+/* ═══════════════════════════════════════════
+   CANVAS RENDERER
+═══════════════════════════════════════════ */
+const canvas = document.getElementById('cave-canvas');
+const ctx    = canvas.getContext('2d');
+
+function resize() {
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+
+function draw() {
+  resize();
+  const W = canvas.width / COLS;
+  const H = canvas.height / ROWS;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < TOTAL; i++) {
+    const [r, c] = rc(i);
+    const x = c * W, y = r * H;
+    const visited  = G.visited.has(i);
+    const revealed = G.revealed.has(i);
+
+    /* background */
+    if (!revealed) {
+      ctx.fillStyle = '#080812';
+    } else if (visited) {
+      ctx.fillStyle = '#1a1a2e';
+    } else {
+      ctx.fillStyle = '#12122a';
+    }
+    ctx.fillRect(x, y, W, H);
+
+    /* grid lines */
+    ctx.strokeStyle = '#2a2a45';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(x, y, W, H);
+
+    if (!revealed) continue;
+
+    const cx = x + W / 2, cy = y + H / 2;
+    const fs = Math.min(W, H) * 0.38;
+
+    /* gold */
+    if (i === G.gold && !G.hasGold) {
+      ctx.font = `${fs}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(visited ? '💰' : '✨', cx, cy);
+    }
+
+    /* pit — only show when visited (or game over) */
+    if (G.pits.includes(i) && (visited || !G.alive)) {
+      ctx.font = `${fs}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('🕳️', cx, cy);
+    }
+
+    /* wumpus — only when visited or game over */
+    if (i === G.wumpus && (visited || !G.alive)) {
+      ctx.font = `${fs}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(G.alive ? '👾' : '💀', cx, cy);
+    }
+
+    /* hazard hints on revealed-but-not-visited rooms */
+    if (revealed && !visited) {
+      const nb = neighbors(i);
+      let hints = '';
+      if (nb.includes(G.wumpus))               hints += '🦨';
+      if (G.pits.some(p => nb.includes(p)))     hints += '💨';
+      if (nb.includes(G.gold) && !G.hasGold)    hints += '✨';
+      if (hints) {
+        ctx.font = `${Math.min(W, H) * 0.24}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(hints, cx, cy + H * 0.16);
+      }
+    }
+
+    /* room number */
+    ctx.font = `${Math.min(W, H) * 0.17}px 'Segoe UI', Arial`;
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(i + 1, x + 4, y + 3);
+  }
+
+  /* player */
+  const [pr, pc] = rc(G.player);
+  const px = pc * W, py = pr * H;
+  ctx.font = `${Math.min(W, H) * 0.46}px serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(G.alive ? '🧑' : '💥', px + W / 2, py + H / 2);
+
+  /* player highlight ring */
+  ctx.strokeStyle = 'rgba(240,192,96,0.55)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px + 2, py + 2, W - 4, H - 4);
+}
+
+/* ── KEYBOARD ── */
+document.addEventListener('keydown', e => {
+  const map = {
+    ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3,
+    w: 0, d: 1, s: 2, a: 3,
+    W: 0, D: 1, S: 2, A: 3
+  };
+  if (e.key in map) { e.preventDefault(); tryMove(map[e.key]); }
+  if (e.key === ' ' || e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleShoot(); }
+});
+
+window.addEventListener('resize', draw);
+newGame();
+</script>
+</body>
+</html>
